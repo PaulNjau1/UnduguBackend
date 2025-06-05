@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  FARMER
+  UNDUGU
+  ADMIN
+}
+
+enum AlertLevel {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  phone        String?    @unique
+  password     String
+  role         Role
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations
+  farms        Farm[]     @relation("FarmerFarms")
+  sessions     Session[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  refreshToken String   @unique
+  userAgent    String?
+  ipAddress    String?
+  isValid      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  expiresAt    DateTime
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade) // <--- ADD THIS!
+}
+
+model Farm {
+  id           String     @id @default(cuid())
+  name         String
+  location     String
+  latitude     Float?
+  longitude    Float?
+  farmerId     String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations
+  farmer       User       @relation("FarmerFarms", fields: [farmerId], references: [id])
+  tanks        Tank[]
+  media        Media[]
+}
+
+model Tank {
+  id             String     @id @default(cuid())
+  name           String
+  farmId         String
+  spindelApiUrl  String?    // 👈 NEW: admin sets this per tank
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  // Relations
+  farm           Farm       @relation(fields: [farmId], references: [id])
+  batches        Batch[]
+}
+
+
+model Batch {
+  id             String           @id @default(cuid())
+  tankId         String
+  batchCode      String           @unique
+  coffeeVariety  String
+  weightKg       Float
+  startDate      DateTime
+  endDate        DateTime?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  // Relations
+  tank           Tank             @relation(fields: [tankId], references: [id])
+  spindelReadings SpindelReading[]
+  alerts         Alert[]
+  media          Media[]
+}
+
+model Alert {
+  id         String          @id @default(uuid())
+  batchId    String
+  readingId  String
+  message    String
+  level      AlertLevel
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  batch      Batch           @relation(fields: [batchId], references: [id])
+  reading    SpindelReading  @relation(fields: [readingId], references: [id])
+
+  @@index([readingId]) // optional but helps performance
+}
+
+
+model SpindelReading {
+  id           String   @id @default(cuid())
+  entryId      Int      @unique
+  createdAt    DateTime
+  angleTilt    Float    // field1
+  temperature  Float    // field2
+  unit         String   // field3
+  battery      Float    // field4
+  gravity      Float    // field5
+  interval     Int      // field6
+  rssi         Int      // field7
+  ssid         String?  // field8 (nullable)
+
+  recordedAt   DateTime @default(now())
+
+  batchId   String
+  batch   Batch    @relation(fields: [batchId], references: [id])
+  alerts  Alert[]  // 👈 this makes it one-to-many
+
+}
+
+
+model Media {
+  id           String   @id @default(cuid())
+  url          String
+  type         String   // image, video, document, etc.
+  uploadedAt   DateTime @default(now())
+
+  // Optional associations
+  batchId      String?
+  farmId       String?
+
+  batch        Batch?   @relation(fields: [batchId], references: [id])
+  farm         Farm?    @relation(fields: [farmId], references: [id])
+}

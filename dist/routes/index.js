@@ -1,0 +1,24 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_routes_1 = __importDefault(require("./auth.routes"));
+const user_routes_1 = __importDefault(require("./user.routes"));
+const farm_routes_1 = __importDefault(require("./farm.routes"));
+const tank_routes_1 = __importDefault(require("./tank.routes"));
+const batch_routes_1 = __importDefault(require("./batch.routes"));
+const readings_routes_1 = __importDefault(require("./readings.routes"));
+const alert_routes_1 = __importDefault(require("./alert.routes"));
+//import mediaRoutes from './media.routes';
+const router = (0, express_1.Router)();
+router.use('/auth', auth_routes_1.default);
+router.use('/users', user_routes_1.default);
+router.use('/farms', farm_routes_1.default);
+router.use('/tanks', tank_routes_1.default);
+router.use('/batches', batch_routes_1.default);
+router.use('/', readings_routes_1.default);
+router.use('/alerts', alert_routes_1.default);
+//router.use('/media', mediaRoutes);
+exports.default = router;
