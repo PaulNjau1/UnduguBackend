@@ -15,7 +15,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@prisma/client": "^6.8.2",
+    "@prisma/client": "^6.9.0",
     "@types/morgan": "^1.9.9",
     "axios": "^1.9.0",
     "bcrypt": "^5.1.1",
@@ -27,7 +27,6 @@
     "morgan": "^1.10.0",
     "node-cron": "^4.1.0",
     "nodemailer": "^6.9.15",
-    "prisma": "^6.8.2",
     "zod": "^3.25.42"
   },
   "devDependencies": {
@@ -37,6 +36,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/nodemailer": "^6.4.16",
     "nodemon": "^3.1.10",
+    "prisma": "^6.9.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }
