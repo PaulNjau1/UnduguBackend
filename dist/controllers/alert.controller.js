@@ -15,7 +15,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteAlert = exports.updateAlert = exports.createAlert = exports.getAlertById = exports.getAllAlerts = exports.getAlertsByBatchId = void 0;
 const client_1 = __importDefault(require("../prisma/client"));
 const alert_validation_1 = require("../validators/alert.validation");
-const client_2 = require("@prisma/client");
 const apiResponse_1 = require("../utils/apiResponse");
 const getAlertsByBatchId = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { batchId } = req.params;
@@ -34,19 +33,6 @@ const getAlertsByBatchId = (req, res) => __awaiter(void 0, void 0, void 0, funct
         });
         if (!batch) {
             return (0, apiResponse_1.apiResponse)(res, 404, "Batch not found.");
-        }
-        // Authorization check: Farmers can only see alerts for batches in their assigned tanks.
-        // Admins and other roles (if defined) can see all.
-        if (user.role === client_2.Role.FARMER) {
-            const isFarmerAssociated = yield client_1.default.farm.findFirst({
-                where: {
-                    id: batch.tank.farmId,
-                    farmerId: user.id,
-                },
-            });
-            if (!isFarmerAssociated) {
-                return (0, apiResponse_1.apiResponse)(res, 403, "You do not have permission to view alerts for this batch.");
-            }
         }
         // Fetch alerts for the batch, ordered by creation date (descending)
         const alerts = yield client_1.default.alert.findMany({

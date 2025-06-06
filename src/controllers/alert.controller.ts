@@ -30,25 +30,7 @@ export const getAlertsByBatchId = async (req: Request, res: Response) => {
       return apiResponse(res, 404, "Batch not found.");
     }
 
-    // Authorization check: Farmers can only see alerts for batches in their assigned tanks.
-    // Admins and other roles (if defined) can see all.
-    if (user.role === Role.FARMER) {
-      const isFarmerAssociated = await prisma.farm.findFirst({
-        where: {
-          id: batch.tank.farmId,
-          farmerId: user.id,
-        },
-      });
-
-      if (!isFarmerAssociated) {
-        return apiResponse(
-          res,
-          403,
-          "You do not have permission to view alerts for this batch."
-        );
-      }
-    }
-
+  
     // Fetch alerts for the batch, ordered by creation date (descending)
     const alerts = await prisma.alert.findMany({
       where: { batchId },

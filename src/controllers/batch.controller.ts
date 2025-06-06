@@ -1,12 +1,10 @@
+// src/controllers/batchController.ts
 import { Request, Response } from 'express';
 import prisma from '../prisma/client';
 import { apiResponse } from '../utils/apiResponse';
 import { Role } from '@prisma/client';
 
-
-// Extend the Request interface if not already done in authenticateToken.ts
-// This ensures TypeScript recognizes req.user.role
-
+// (Ensure your express.d.ts or local declaration for Request.user is set up)
 
 /**
  * Creates a new batch under a specific tank.
@@ -14,44 +12,55 @@ import { Role } from '@prisma/client';
  * Only farmers should be able to create batches for their tanks.
  */
 export const createBatch = async (req: Request, res: Response) => {
-  const { tankId, batchCode, coffeeVariety, weightKg, startDate, endDate, isActive,user } = req.body;
+  // Correctly extract user from req.user
+  const currentUser = req.user;
+  if (!currentUser) {
+    return apiResponse(res, 401, 'Unauthorized: User not authenticated.');
+  }
 
-  // --- FIX: Parse weightKg to a number ---
+  const { tankId, batchCode, coffeeVariety, weightKg, startDate, endDate, isActive } = req.body;
+
   const parsedWeightKg = parseFloat(weightKg);
 
   if (isNaN(parsedWeightKg)) {
     return apiResponse(res, 400, 'Invalid input for weightKg. Must be a number.');
   }
-  // --- END FIX ---
 
   try {
     // Check tank ownership: Only the farmer who owns the tank can create a batch for it.
-    const tank = await prisma.tank.findFirst({
-      where: {
-        id: tankId,
-        farm: { farmerId: user.id }, // Ensure req.user exists and has an ID
-      },
-    });
-
-  
-
-    if (tank || user.role == 'ADMIN'){
-      const batch = await prisma.batch.create({
-        data: {
-          tankId,
-          batchCode,
-          coffeeVariety,
-          weightKg: parsedWeightKg, // Use the parsed number here
-          startDate: new Date(startDate),
-          endDate: endDate ? new Date(endDate) : null,
-          isActive: isActive !== undefined ? isActive : true, // Default to true if not provided
-        },
-      });
-      return apiResponse(res, 201, 'Batch created successfully', batch);
-
+    // Admins can create for any tank.
+    let isAuthorized = false;
+    if (currentUser.role === Role.ADMIN) {
+        isAuthorized = true; // Admin can create for any tank
+    } else if (currentUser.role === Role.FARMER) {
+        const tank = await prisma.tank.findFirst({
+            where: {
+                id: tankId,
+                farm: { farmerId: currentUser.id }, // Check ownership for farmer
+            },
+        });
+        isAuthorized = !!tank; // True if tank is found and owned by the farmer
+    } else {
+        return apiResponse(res, 403, 'Forbidden: Only farmers and admins can create batches.');
     }
 
-   
+    if (!isAuthorized) {
+        return apiResponse(res, 403, 'Forbidden: You do not have permission to create a batch for this tank.');
+    }
+
+    const batch = await prisma.batch.create({
+      data: {
+        tankId,
+        batchCode,
+        coffeeVariety,
+        weightKg: parsedWeightKg,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : null,
+        isActive: isActive !== undefined ? isActive : true,
+      },
+    });
+    return apiResponse(res, 201, 'Batch created successfully', batch);
+
   } catch (error) {
     console.error('Error creating batch:', error);
     return apiResponse(res, 500, 'Failed to create batch. Please try again.');
@@ -64,20 +73,24 @@ export const createBatch = async (req: Request, res: Response) => {
  * - Undugu employees and Admins see all batches in the system.
  */
 export const getMyBatches = async (req: Request, res: Response) => {
+  const currentUser = req.user;
+  if (!currentUser) {
+    return apiResponse(res, 401, 'Unauthorized: User not authenticated.');
+  }
+
   let whereClause: any = {};
-  const userRole = req.user?.role; // Get the role from the authenticated user
 
   // Apply filtering based on user role
-  if (userRole === Role.FARMER) {
+  if (currentUser.role === Role.FARMER) {
     whereClause = {
       tank: {
         farm: {
-          farmerId: req.user?.id, // Filter by the farmer's ID
+          farmerId: currentUser.id, // Filter by the farmer's ID
         },
       },
     };
   }
-  // If userRole is ADMIN or UNDUGU, whereClause remains empty,
+  // If currentUser.role is ADMIN or UNDUGU, whereClause remains empty,
   // which will return all batches as desired.
 
   try {
@@ -101,8 +114,6 @@ export const getMyBatches = async (req: Request, res: Response) => {
   }
 };
 
-
-
 /**
  * Retrieves a single batch by ID.
  * - Farmers can only access their own batches.
@@ -110,16 +121,18 @@ export const getMyBatches = async (req: Request, res: Response) => {
  */
 export const getBatchById = async (req: Request, res: Response) => {
   const batchId = req.params.id;
-  const userRole = req.user?.role;
-  const userId = req.user?.id;
+  const currentUser = req.user;
+  if (!currentUser) {
+    return apiResponse(res, 401, 'Unauthorized: User not authenticated.');
+  }
 
   let batchWhereClause: any = { id: batchId };
 
   // Apply ownership check only for farmers
-  if (userRole === Role.FARMER) {
+  if (currentUser.role === Role.FARMER) {
     batchWhereClause = {
       id: batchId,
-      tank: { farm: { farmerId: userId } }, // Farmer must own the tank associated with the batch
+      tank: { farm: { farmerId: currentUser.id } }, // Farmer must own the tank associated with the batch
     };
   }
 
@@ -145,8 +158,6 @@ export const getBatchById = async (req: Request, res: Response) => {
   }
 };
 
-
-
 /**
  * Updates an existing batch.
  * Only the farmer who owns the batch (via tank/farm) or an Admin/Undugu can update it.
@@ -154,10 +165,11 @@ export const getBatchById = async (req: Request, res: Response) => {
 export const updateBatch = async (req: Request, res: Response) => {
   const batchId = req.params.id;
   const { batchCode, coffeeVariety, weightKg, startDate, endDate, isActive } = req.body;
-  const userRole = req.user?.role;
-  const userId = req.user?.id;
+  const currentUser = req.user;
+  if (!currentUser) {
+    return apiResponse(res, 401, 'Unauthorized: User not authenticated.');
+  }
 
-  // --- FIX: Parse weightKg to a number if present in update ---
   let parsedWeightKg: number | undefined;
   if (weightKg !== undefined) {
       parsedWeightKg = parseFloat(weightKg);
@@ -165,15 +177,14 @@ export const updateBatch = async (req: Request, res: Response) => {
           return apiResponse(res, 400, 'Invalid input for weightKg. Must be a number.');
       }
   }
-  // --- END FIX ---
 
   let updateWhereClause: any = { id: batchId };
 
   // Only apply ownership check for farmers
-  if (userRole === Role.FARMER) {
+  if (currentUser.role === Role.FARMER) {
     updateWhereClause = {
       id: batchId,
-      tank: { farm: { farmerId: userId } }, // Farmer must own the associated tank
+      tank: { farm: { farmerId: currentUser.id } }, // Farmer must own the associated tank
     };
   }
 
@@ -183,9 +194,9 @@ export const updateBatch = async (req: Request, res: Response) => {
       data: {
         batchCode,
         coffeeVariety,
-        weightKg: parsedWeightKg, // Use the parsed number here
+        weightKg: parsedWeightKg,
         startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : null, // Ensure null is passed if endDate is empty
+        endDate: endDate ? new Date(endDate) : null,
         isActive,
       },
     });
@@ -200,23 +211,24 @@ export const updateBatch = async (req: Request, res: Response) => {
   }
 };
 
-
 /**
  * Deletes a batch.
  * Only the farmer who owns the batch (via tank/farm) or an Admin/Undugu can delete it.
  */
 export const deleteBatch = async (req: Request, res: Response) => {
   const batchId = req.params.id;
-  const userRole = req.user?.role;
-  const userId = req.user?.id;
+  const currentUser = req.user;
+  if (!currentUser) {
+    return apiResponse(res, 401, 'Unauthorized: User not authenticated.');
+  }
 
   let deleteWhereClause: any = { id: batchId };
 
   // Only apply ownership check for farmers
-  if (userRole === Role.FARMER) {
+  if (currentUser.role === Role.FARMER) {
     deleteWhereClause = {
       id: batchId,
-      tank: { farm: { farmerId: userId } }, // Farmer must own the associated tank
+      tank: { farm: { farmerId: currentUser.id } }, // Farmer must own the associated tank
     };
   }
 
